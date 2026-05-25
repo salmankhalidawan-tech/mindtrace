@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MindTrace – Health Sentiment Tracker</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #0d1117;
+  --bg2:     #161b22;
+  --bg3:     #1c2330;
+  --border:  rgba(255,255,255,0.08);
+  --border2: rgba(255,255,255,0.14);
+  --text:    #e6edf3;
+  --text2:   #8b949e;
+  --text3:   #484f58;
+  --accent:  #58a6ff;
+  --green:   #3fb950;
+  --red:     #f85149;
+  --orange:  #d29922;
+  --purple:  #bc8cff;
+  --teal:    #39d353;
+  --radius:  10px;
+}
+
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ── Layout ── */
+.layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+
+/* ── Sidebar ── */
+.sidebar { background: var(--bg2); border-right: 1px solid var(--border); padding: 0; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.sidebar-top { padding: 20px 16px 16px; border-bottom: 1px solid var(--border); }
+.logo { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #58a6ff 0%, #bc8cff 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.logo h1 { font-size: 15px; font-weight: 700; color: var(--text); }
+.logo-sub { font-size: 11px; color: var(--text3); padding-left: 42px; }
+
+nav { padding: 12px 8px; }
+.nav-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 6px; border: none; background: none; color: var(--text2); font-size: 13px; cursor: pointer; transition: all .15s; text-align: left; margin-bottom: 2px; }
+.nav-btn:hover { background: var(--bg3); color: var(--text); }
+.nav-btn.active { background: rgba(88,166,255,.12); color: var(--accent); font-weight: 600; }
+.nav-icon { font-size: 15px; width: 18px; }
+
+.recent-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text3); padding: 8px 16px 6px; }
+.entry-scroll { flex: 1; overflow-y: auto; padding: 4px 8px 16px; }
+.entry-card { padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 3px; border: 1px solid transparent; transition: .15s; position: relative; }
+.entry-card:hover { background: var(--bg3); border-color: var(--border); }
+.entry-card.active { background: var(--bg3); border-color: var(--border2); }
+.ec-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; gap: 8px; }
+.ec-date { font-size: 10px; color: var(--text3); }
+.ec-emotion { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 20px; }
+.ec-preview { font-size: 11px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 18px; }
+.delete-btn { display: none; background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; transition: color 0.15s; }
+.entry-card:hover .delete-btn { display: inline-block; }
+.delete-btn:hover { color: var(--red); }
+
+/* ── Main ── */
+.main { display: flex; flex-direction: column; overflow-y: auto; }
+.topbar { padding: 16px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: var(--bg); z-index: 10; }
+.topbar-title h2 { font-size: 16px; font-weight: 700; }
+.topbar-title p  { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.topbar-date { font-size: 11px; color: var(--text3); }
+
+.content { padding: 24px 28px; flex: 1; }
+
+/* ── Views ── */
+.view { display: none; }
+.view.show { display: block; }
+
+/* ── Stats row ── */
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.stat-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.stat-box .label { font-size: 11px; color: var(--text3); margin-bottom: 6px; }
+.stat-box .value { font-size: 22px; font-weight: 700; line-height: 1; }
+.stat-box .sub   { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+/* ── Card ── */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; }
+.card-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.card-head-title { font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.card-body { padding: 18px; }
+
+/* ── Journal write ── */
+textarea#entry {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px; color: var(--text); font-family: inherit; font-size: 14px; line-height: 1.7;
+  resize: none; outline: none; transition: border-color .2s;
+}
+textarea#entry:focus { border-color: var(--accent); }
+textarea#entry::placeholder { color: var(--text3); }
+
+.quick-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.qtag { font-size: 11px; padding: 4px 10px; border-radius: 20px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); cursor: pointer; transition: .15s; }
+.qtag:hover { border-color: var(--accent); color: var(--accent); }
+
+.entry-footer { display: flex; align-items: center; margin-top: 14px; gap: 12px; }
+.word-count { font-size: 11px; color: var(--text3); }
+
+/* ── Button ── */
+.btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: .2s; }
+.btn-primary { background: var(--accent); color: #0d1117; margin-left: auto; }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-sm { padding: 5px 12px; font-size: 12px; background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
+.btn-sm:hover { background: var(--border2); color: var(--text); }
+
+/* ── Analysis result ── */
+#result-box { display: none; margin-top: 14px; background: var(--bg3); border-radius: 8px; padding: 16px; border-left: 3px solid var(--accent); animation: fadeIn .3s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+.result-top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+#result-badge { font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 20px; border: 1px solid; display: inline-block; }
+#result-score { font-size: 12px; color: var(--text2); }
+#result-summary { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 12px; }
+
+.score-bars { display: flex; flex-direction: column; gap: 7px; }
+.bar-row { display: flex; align-items: center; gap: 10px; }
+.bar-lbl { font-size: 11px; color: var(--text2); width: 70px; }
+.bar-track { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; transition: width .5s ease; }
+.bar-val { font-size: 11px; color: var(--text3); width: 32px; text-align: right; }
+
+.keywords-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.kw-tag { font-size: 11px; padding: 3px 9px; border-radius: 12px; background: rgba(88,166,255,.1); color: var(--accent); border: 1px solid rgba(88,166,255,.2); }
+
+/* ── Emotion color map ── */
+.e-hopeful  { background: rgba(188,140,255,.15); color: #bc8cff; border-color: rgba(188,140,255,.3); }
+.e-calm     { background: rgba(57,211,83,.15);   color: #39d353;  border-color: rgba(57,211,83,.3); }
+.e-grateful { background: rgba(63,185,80,.15);   color: #3fb950;  border-color: rgba(63,185,80,.3); }
+.e-anxious  { background: rgba(210,153,34,.15);  color: #d29922;  border-color: rgba(210,153,34,.3); }
+.e-tired    { background: rgba(139,148,158,.15); color: #8b949e;  border-color: rgba(139,148,158,.3); }
+.e-sad      { background: rgba(88,166,255,.15);  color: #58a6ff;  border-color: rgba(88,166,255,.3); }
+.e-angry    { background: rgba(248,81,73,.15);   color: #f85149;  border-color: rgba(248,81,73,.3); }
+.e-pain     { background: rgba(248,81,73,.12);   color: #ff7b72;  border-color: rgba(248,81,73,.25); }
+.e-neutral  { background: rgba(139,148,158,.12); color: #8b949e;  border-color: rgba(139,148,158,.25); }
+
+/* ── Insights ── */
+.insight-item { display: flex; gap: 12px; padding: 12px; background: var(--bg3); border-radius: 8px; margin-bottom: 8px; }
+.insight-icon { width: 30px; height: 30px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.insight-text { font-size: 13px; color: var(--text2); line-height: 1.5; }
+.insight-text strong { color: var(--text); }
+
+.empty-msg { text-align: center; padding: 40px 20px; color: var(--text3); font-size: 13px; }
+.empty-msg .big { font-size: 28px; margin-bottom: 10px; }
+
+/* ── Spinner ── */
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(13,17,23,.3); border-top-color: #0d1117; border-radius: 50%; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- ── Sidebar ─────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="logo">
+        <div class="logo-icon">🧠</div>
+        <h1>MindTrace</h1>
+      </div>
+      <div class="logo-sub">Health Sentiment Tracker</div>
+    </div>
+
+    <nav>
+      <button class="nav-btn active" onclick="switchView('journal',this)">
+        <span class="nav-icon">📝</span> Journal
+      </button>
+      <button class="nav-btn" onclick="switchView('trends',this)">
+        <span class="nav-icon">📈</span> Trends
+      </button>
+      <button class="nav-btn" onclick="switchView('insights',this)">
+        <span class="nav-icon">💡</span> Insights
+      </button>
+    </nav>
+
+    <div class="recent-label">Recent Entries</div>
+    <div class="entry-scroll" id="entrySidebar">
+      <div class="empty-msg" style="padding:20px 10px;font-size:12px;">No entries yet.</div>
+    </div>
+  </aside>
+
+  <!-- ── Main ─────────────────────────── -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">
+        <h2 id="view-title">Journal</h2>
+        <p id="view-sub">Write how you're feeling — AI will track your emotional health</p>
+      </div>
+      <div class="topbar-date" id="topbar-date"></div>
+    </div>
+
+    <div class="content">
+
+      <!-- ── Journal View ── -->
+      <div class="view show" id="view-journal">
+        <div class="stats-row">
+          <div class="stat-box"><div class="label">Total Entries</div><div class="value" id="s-total">0</div><div class="sub">logs saved</div></div>
+          <div class="stat-box"><div class="label">Avg Sentiment</div><div class="value" id="s-sent" style="color:var(--green)">—</div><div class="sub">compound score</div></div>
+          <div class="stat-box"><div class="label">Dominant Mood</div><div class="value" id="s-mood" style="font-size:14px;padding-top:5px;">—</div><div class="sub">overall pattern</div></div>
+          <div class="stat-box"><div class="label">Avg Wellness</div><div class="value" id="s-well">—</div><div class="sub">out of 10</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-head-title">✍️ New Entry</div>
+            <span class="word-count" id="word-count">0 words</span>
+          </div>
+          <div class="card-body">
+            <textarea id="entry" rows="6" placeholder="How are you feeling today? Describe your mood, symptoms, energy levels, thoughts…"></textarea>
+
+            <div style="margin-top:12px;">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">Quick tags:</div>
+              <div class="quick-tags">
+                <span class="qtag" onclick="addTag('feeling anxious today')">😰 anxious</span>
+                <span class="qtag" onclick="addTag('feeling hopeful')">🌟 hopeful</span>
+                <span class="qtag" onclick="addTag('low energy and tired')">😴 tired</span>
+                <span class="qtag" onclick="addTag('in pain and discomfort')">😣 in pain</span>
+                <span class="qtag" onclick="addTag('feeling calm and peaceful')">😌 calm</span>
+                <span class="qtag" onclick="addTag('feeling overwhelmed')">😤 overwhelmed</span>
+                <span class="qtag" onclick="addTag('grateful and thankful')">🙏 grateful</span>
+                <span class="qtag" onclick="addTag('feeling frustrated')">😠 frustrated</span>
+                <span class="qtag" onclick="addTag('sad and lonely')">😢 sad</span>
+                <span class="qtag" onclick="addTag('motivated and energetic')">💪 motivated</span>
+              </div>
+            </div>
+
+            <div class="entry-footer">
+              <span style="font-size:12px;color:var(--text3);" id="entry-time"></span>
+              <button class="btn btn-primary" id="analyze-btn" onclick="submitEntry()">
+                🔍 Analyze & Save
+              </button>
+            </div>
+
+            <!-- Analysis Result -->
+            <div id="result-box">
+              <div class="result-top">
+                <span id="result-badge">—</span>
+                <span id="result-score"></span>
+              </div>
+              <p id="result-summary"></p>
+              <div class="score-bars" id="score-bars"></div>
+              <div class="keywords-row" id="result-keywords"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Trends View ── -->
+      <div class="view" id="view-trends">
+        <div class="stats-row">
+          <div class="stat-box"><div class="label">Positive Days</div><div class="value" id="t-pos" style="color:var(--green)">—</div></div>
+          <div class="stat-box"><div class="label">Anxious Days</div><div class="value" id="t-anx" style="color:var(--orange)">—</div></div>
+          <div class="stat-box"><div class="label">Avg Wellness</div><div class="value" id="t-well">—</div><div class="sub">out of 10</div></div>
+          <div class="stat-box"><div class="label">Total Entries</div><div class="value" id="t-total">—</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div class="card-head-title">📈 Sentiment Over Time</div></div>
+          <div class="card-body">
+            <div id="trend-chart" style="height:240px;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div class="card-head-title">🎭 Emotion Distribution</div></div>
+          <div class="card-body">
+            <div id="dist-chart" style="height:220px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Insights View ── -->
+      <div class="view" id="view-insights">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-head-title">💡 Health Insights</div>
+            <button class="btn btn-sm" onclick="loadInsights()">↻ Refresh</button>
+          </div>
+          <div class="card-body" id="insights-body">
+            <div class="empty-msg"><div class="big">💡</div>Add journal entries to generate insights.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div class="card-head-title">🏷️ Common Keywords</div></div>
+          <div class="card-body">
+            <div id="keywords-cloud" class="keywords-row" style="min-height:50px;">
+              <span style="font-size:13px;color:var(--text3);">No entries yet.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<script>
+// ── Emotion colors ────────────────────────────────────
+const COLORS = {
+  hopeful:'#bc8cff', calm:'#39d353', grateful:'#3fb950',
+  anxious:'#d29922', tired:'#8b949e', sad:'#58a6ff',
+  angry:'#f85149', pain:'#ff7b72', neutral:'#8b949e'
+};
+const ICONS = {
+  hopeful:'🌟', calm:'😌', grateful:'🙏', anxious:'😰',
+  tired:'😴', sad:'😢', angry:'😠', pain:'😣', neutral:'😐'
+};
+
+// ── Init ──────────────────────────────────────────────
+document.getElementById('topbar-date').textContent =
+  new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+document.getElementById('entry-time').textContent =
+  new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+
+document.getElementById('entry').addEventListener('input', function(){
+  const n = this.value.trim().split(/\s+/).filter(Boolean).length;
+  document.getElementById('word-count').textContent = n + ' words';
+});
+
+loadStats();
+loadSidebar();
+
+// ── Add quick tag ─────────────────────────────────────
+function addTag(text){
+  const ta = document.getElementById('entry');
+  ta.value = ta.value ? ta.value.trimEnd() + ', ' + text : text;
+  ta.focus();
+  const n = ta.value.trim().split(/\s+/).filter(Boolean).length;
+  document.getElementById('word-count').textContent = n + ' words';
+}
+
+// ── Switch view ───────────────────────────────────────
+const VIEW_META = {
+  journal: ['Journal', 'Write how you\'re feeling — AI will track your emotional health'],
+  trends:  ['Trends',  'Visualize your emotional patterns over time'],
+  insights:['Insights','Personalized observations from your journal history'],
+};
+function switchView(name, btn){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('show'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('show');
+  btn.classList.add('active');
+  const [title, sub] = VIEW_META[name];
+  document.getElementById('view-title').textContent = title;
+  document.getElementById('view-sub').textContent   = sub;
+  if(name === 'trends')   loadTrends();
+  if(name === 'insights') loadInsights();
+}
+
+// ── Submit entry ──────────────────────────────────────
+async function submitEntry(){
+  const text = document.getElementById('entry').value.trim();
+  if(text.length < 10){ alert('Please write more before analyzing.'); return; }
+
+  const btn = document.getElementById('analyze-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Analyzing…';
+  document.getElementById('result-box').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text})
+    });
+    const d = await res.json();
+    if(d.error) throw new Error(d.error);
+    showResult(d);
+    document.getElementById('entry').value = '';
+    document.getElementById('word-count').textContent = '0 words';
+    loadStats();
+    loadSidebar();
+  } catch(e){
+    alert('Error: ' + e.message);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '🔍 Analyze & Save';
+}
+
+// ── Show analysis result ──────────────────────────────
+function showResult(d){
+  const color = COLORS[d.emotion] || '#8b949e';
+  const icon  = ICONS[d.emotion]  || '😐';
+  const badge = document.getElementById('result-badge');
+  badge.textContent = icon + ' ' + d.emotion;
+  badge.className   = 'e-' + d.emotion;
+
+  const sign = d.compound >= 0 ? '+' : '';
+  document.getElementById('result-score').textContent =
+    `Sentiment: ${sign}${d.compound.toFixed(2)} · Wellness: ${d.wellness}/10`;
+
+  // summary
+  const labels = {
+    hopeful:'Your entry reflects optimism and hope. Keep building on this positive momentum.',
+    calm:'Your entry shows a sense of calm and balance — a healthy mental state.',
+    grateful:'Gratitude patterns detected. This mindset is strongly linked to better wellbeing.',
+    anxious:'Anxiety themes detected. Consider relaxation techniques or speaking with someone.',
+    tired:'Fatigue patterns noted. Rest and recovery are important for both physical and mental health.',
+    sad:'Your entry reflects sadness. It\'s okay to feel this way — consider reaching out for support.',
+    angry:'Frustration and anger detected. Processing these emotions is an important part of wellbeing.',
+    pain:'Physical discomfort noted in your entry. Tracking symptoms over time can help identify patterns.',
+    neutral:'A relatively neutral entry. Consistent journaling helps track subtle shifts over time.',
+  };
+  document.getElementById('result-summary').textContent = labels[d.emotion] || 'Entry recorded.';
+
+  // score bars
+  const bars = [
+    ['Positive', d.pos*100, '#3fb950'],
+    ['Negative', d.neg*100, '#f85149'],
+    ['Neutral',  d.neu*100, '#58a6ff'],
+  ];
+  document.getElementById('score-bars').innerHTML = bars.map(([lbl,val,col]) => `
+    <div class="bar-row">
+      <div class="bar-lbl">${lbl}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${val.toFixed(0)}%;background:${col}"></div></div>
+      <div class="bar-val">${val.toFixed(0)}%</div>
+    </div>`).join('');
+
+  // keywords
+  document.getElementById('result-keywords').innerHTML =
+    (d.keywords||[]).map(k => `<span class="kw-tag">${k}</span>`).join('');
+
+  document.getElementById('result-box').style.display = 'block';
+}
+
+// ── Load sidebar entries ──────────────────────────────
+async function loadSidebar(){
+  const res = await fetch('/api/entries?limit=25');
+  const rows = await res.json();
+  const el = document.getElementById('entrySidebar');
+  if(!rows.length){
+    el.innerHTML = '<div class="empty-msg" style="padding:20px 10px;font-size:12px;">No entries yet.</div>';
+    return;
+  }
+  el.innerHTML = rows.map(r => {
+    const d = new Date(r.created);
+    const dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const color = COLORS[r.emotion]||'#8b949e';
+    const icon  = ICONS[r.emotion]||'😐';
+    const escapedText = escapeHtml(r.text.slice(0,55));
+    return `<div class="entry-card">
+      <div class="ec-top">
+        <span class="ec-date">${dateStr}</span>
+        <span class="ec-emotion e-${r.emotion}" style="font-size:10px;padding:1px 7px;border-radius:20px;border:1px solid">${icon} ${r.emotion}</span>
+        <button class="delete-btn" onclick="deleteEntry(${r.id}, event)">&times;</button>
+      </div>
+      <div class="ec-preview">${escapedText}&hellip;</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Load stats ────────────────────────────────────────
+async function loadStats(){
+  const res = await fetch('/api/stats');
+  const d = await res.json();
+  if(!d.total) return;
+  document.getElementById('s-total').textContent = d.total;
+  const sign = d.avg_sent >= 0 ? '+' : '';
+  document.getElementById('s-sent').textContent = sign + d.avg_sent.toFixed(2);
+  document.getElementById('s-sent').style.color = d.avg_sent >= 0 ? 'var(--green)' : 'var(--red)';
+  const moodEl = document.getElementById('s-mood');
+  moodEl.textContent = (ICONS[d.dominant]||'😐') + ' ' + d.dominant;
+  moodEl.style.color = COLORS[d.dominant]||'#8b949e';
+  document.getElementById('s-well').textContent = d.avg_well + '/10';
+  document.getElementById('s-well').style.color = d.avg_well >= 6 ? 'var(--green)' : d.avg_well >= 4 ? 'var(--orange)' : 'var(--red)';
+}
+
+// ── Trends charts ─────────────────────────────────────
+async function loadTrends(){
+  const statsRes = await fetch('/api/stats');
+  const stats = await statsRes.json();
+  const entriesRes = await fetch('/api/entries?limit=50');
+  const entries = await entriesRes.json();
+
+  if(!entries.length){
+    ['trend-chart','dist-chart'].forEach(id => {
+      document.getElementById(id).innerHTML = '<div class="empty-msg">Add entries to see trends.</div>';
+    });
+    return;
+  }
+
+  // Stats
+  const posCount = entries.filter(e=>['hopeful','calm','grateful'].includes(e.emotion)).length;
+  const anxCount = entries.filter(e=>e.emotion==='anxious').length;
+  document.getElementById('t-pos').textContent   = posCount;
+  document.getElementById('t-anx').textContent   = anxCount;
+  document.getElementById('t-well').textContent  = stats.avg_well + '/10';
+  document.getElementById('t-total').textContent = stats.total;
+
+  // Trend line
+  const sorted = [...entries].sort((a,b)=>new Date(a.created)-new Date(b.created));
+  const dates  = sorted.map(e => e.created.slice(0,10));
+  const sents  = sorted.map(e => +e.sentiment.toFixed(3));
+  const wells  = sorted.map(e => +(e.wellness/10 - 0.5).toFixed(2));
+
+  Plotly.newPlot('trend-chart', [
+    { x: dates, y: sents, type:'scatter', mode:'lines+markers', name:'Sentiment',
+      line:{color:'#58a6ff',width:2}, marker:{color:'#58a6ff',size:6} },
+    { x: dates, y: wells, type:'scatter', mode:'lines+markers', name:'Wellness',
+      line:{color:'#3fb950',width:2,dash:'dot'}, marker:{color:'#3fb950',size:6} },
+  ], {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    margin:{l:40,r:10,t:10,b:40},
+    yaxis:{range:[-1,1],gridcolor:'rgba(255,255,255,0.06)',color:'#484f58',zeroline:true,zerolinecolor:'rgba(255,255,255,0.1)'},
+    xaxis:{gridcolor:'rgba(255,255,255,0.06)',color:'#484f58'},
+    legend:{font:{color:'#8b949e',size:11},bgcolor:'transparent'},
+    font:{color:'#8b949e',size:11},
+  },{responsive:true, displayModeBar:false});
+
+  // Distribution bar
+  const emoCounts = {};
+  entries.forEach(e => { emoCounts[e.emotion] = (emoCounts[e.emotion]||0)+1; });
+  const sorted2 = Object.entries(emoCounts).sort((a,b)=>b[1]-a[1]);
+  const labels2 = sorted2.map(([em]) => (ICONS[em]||'') + ' ' + em);
+  const vals2   = sorted2.map(([,v]) => v);
+  const clrs2   = sorted2.map(([em]) => COLORS[em]||'#8b949e');
+
+  Plotly.newPlot('dist-chart', [{
+    x: labels2, y: vals2, type:'bar',
+    marker:{ color: clrs2.map(c=>c+'99'), line:{color:clrs2,width:1.5} },
+  }], {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    margin:{l:30,r:10,t:10,b:50},
+    yaxis:{gridcolor:'rgba(255,255,255,0.06)',color:'#484f58',tickformat:'d'},
+    xaxis:{color:'#8b949e'},
+    showlegend:false, font:{color:'#8b949e',size:11},
+  },{responsive:true, displayModeBar:false});
+}
+
+// ── Insights ──────────────────────────────────────────
+async function loadInsights(){
+  const statsRes  = await fetch('/api/stats');
+  const stats     = await statsRes.json();
+  const entriesRes = await fetch('/api/entries?limit=50');
+  const entries   = await entriesRes.json();
+
+  if(!entries.length){
+    document.getElementById('insights-body').innerHTML =
+      '<div class="empty-msg"><div class="big">💡</div>Add journal entries to generate insights.</div>';
+    return;
+  }
+
+  // Keyword cloud
+  const allKw = {};
+  entries.forEach(e => {
+    // extract from text manually for display
+    const words = e.text.toLowerCase().match(/\b\w{4,}\b/g)||[];
+    const stops = new Set(['that','this','have','from','they','will','with','been','were','what','when','your','just','also','into','more','some','over','than','then','them','there','their']);
+    words.filter(w=>!stops.has(w)).forEach(w => { allKw[w]=(allKw[w]||0)+1; });
+  });
+  const topKw = Object.entries(allKw).sort((a,b)=>b[1]-a[1]).slice(0,16);
+  document.getElementById('keywords-cloud').innerHTML = topKw.map(([k,v]) =>
+    `<span class="kw-tag" style="font-size:${Math.min(14,11+v)}px;opacity:${Math.min(1,0.5+v*0.15)}">${k}${v>1?' ('+v+')':''}</span>`
+  ).join('');
+
+  // Build insights
+  const insights = [];
+  const n = entries.length;
+  const recent = entries.slice(0,5);
+  const older  = entries.slice(5,10);
+  const recentAvg = recent.reduce((s,e)=>s+e.sentiment,0)/recent.length;
+  const olderAvg  = older.length ? older.reduce((s,e)=>s+e.sentiment,0)/older.length : recentAvg;
+  const trend = recentAvg - olderAvg;
+
+  if(trend > 0.15) insights.push(['📈','var(--green)', '<strong>Improving mood trend.</strong> Your recent entries are more positive than earlier ones. Keep up whatever you\'re doing!']);
+  else if(trend < -0.15) insights.push(['📉','var(--red)', '<strong>Declining mood detected.</strong> Your recent entries are lower than earlier. Consider speaking with a healthcare provider.']);
+  else insights.push(['➡️','var(--accent)', '<strong>Stable mood pattern.</strong> Your sentiment has been consistent recently. Stability is a healthy sign.']);
+
+  const anxCount = entries.filter(e=>e.emotion==='anxious').length;
+  if(anxCount/n > 0.35) insights.push(['⚠️','var(--orange)', `<strong>Frequent anxiety (${anxCount}/${n} entries).</strong> Anxiety appears regularly in your journal. Breathing exercises, mindfulness, or therapy may help.`]);
+
+  const posCount = entries.filter(e=>['hopeful','calm','grateful'].includes(e.emotion)).length;
+  if(posCount/n > 0.5) insights.push(['✨','var(--purple)', `<strong>Predominantly positive outlook.</strong> ${posCount} of ${n} entries reflect hopeful, calm, or grateful emotions — a strong indicator of good mental health.`]);
+
+  const wellAvg = stats.avg_well;
+  const wellColor = wellAvg>=7?'var(--green)':wellAvg>=5?'var(--orange)':'var(--red)';
+  const wellMsg = wellAvg>=7?'Above the healthy threshold. Keep it up.':wellAvg>=5?'Moderate wellness. Small daily habits can make a difference.':'Below average. Please consider professional support.';
+  insights.push(['📊',wellColor, `<strong>Average wellness: ${wellAvg}/10.</strong> ${wellMsg}`]);
+
+  const painCount = entries.filter(e=>e.emotion==='pain').length;
+  if(painCount > 0) insights.push(['🩺','var(--red)', `<strong>Physical symptoms noted in ${painCount} entr${painCount>1?'ies':'y'}.</strong> Tracking pain and discomfort over time helps identify patterns valuable to share with your doctor.`]);
+
+  if(n >= 7) insights.push(['📅','var(--teal)', `<strong>Journaling streak: ${n} entries.</strong> Consistent journaling improves emotional self-awareness and has been linked to better mental health outcomes.`]);
+
+  document.getElementById('insights-body').innerHTML = insights.map(([icon,color,text]) => `
+    <div class="insight-item">
+      <div class="insight-icon" style="background:${color}22;color:${color}">${icon}</div>
+      <div class="insight-text">${text}</div>
+    </div>`).join('');
+}
+// ── Helper & Delete Functions ─────────────────────────
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+}
+
+async function deleteEntry(id, event) {
+  if (event) event.stopPropagation();
+  if (!confirm('Are you sure you want to delete this entry?')) return;
+  try {
+    const res = await fetch(`/api/delete/${id}`, { method: 'DELETE' });
+    const d = await res.json();
+    if (d.ok) {
+      loadStats();
+      loadSidebar();
+      if (document.getElementById('view-trends').classList.contains('show')) {
+        loadTrends();
+      }
+      if (document.getElementById('view-insights').classList.contains('show')) {
+        loadInsights();
+      }
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+</script>
+</body>
+</html>
