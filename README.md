@@ -253,7 +253,7 @@ Client-side rule engine generates contextual observations such as:
 mindtrace/
 ├── app.py              # Flask server + NLP logic + API routes (~140 lines)
 ├── requirements.txt    # flask>=3.0  nltk>=3.8
-├── journal.db          # SQLite database (auto-created on first run)
+├── journal_backup.db          # SQLite database (auto-created on first run)
 ├── templates/
 │   └── index.html      # Complete SPA: HTML + CSS + JS (~750 lines)
 └── README.md
